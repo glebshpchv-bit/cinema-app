@@ -1,0 +1,1125 @@
+openapi: 3.0.0
+info:
+  title: Movie Booking System API
+  version: 1.0.0
+  description: API for browsing movies, viewing showtimes, booking tickets, and managing user accounts for a cinema system.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+  - url: https://api.moviebooking.com/v1
+    description: Production server
+security:
+  - bearerAuth: [] # Apply bearerAuth globally by default; specific paths can override
+
+tags:
+  - name: Authentication
+    description: User registration and login operations.
+  - name: Movies
+    description: Browse movie catalog, view details, search, and filter.
+  - name: Cinemas & Showtimes
+    description: Find cinema locations and view available showtimes for movies.
+  - name: Bookings & Tickets
+    description: Create bookings, process payments, and manage user's tickets.
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - firstName
+                - lastName
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                  description: Unique email address for the user.
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: strongP@ss123
+                  description: User's password (will be hashed serverside).
+                firstName:
+                  type: string
+                  example: John
+                lastName:
+                  type: string
+                  example: Doe
+      responses:
+        '201':
+          description: User successfully registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User with email already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      summary: Log in a user and get an authentication token
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: strongP@ss123
+      responses:
+        '200':
+          description: User successfully logged in.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT authentication token.
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2F-DgJ_K_f_wg_zK0n5e1a_tQ_hF0
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /movies:
+    get:
+      summary: Browse available movies with optional filtering and search
+      tags:
+        - Movies
+      parameters:
+        - name: title
+          in: query
+          schema:
+            type: string
+          description: Search movies by title (partial match).
+          example: Avengers
+        - name: genre
+          in: query
+          schema:
+            type: string
+          description: Filter movies by genre name.
+          example: Action
+        - name: releaseDateAfter
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter movies released after a specific date (YYYY-MM-DD).
+          example: '2023-01-01'
+        - name: cinemaId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter movies currently showing at a specific cinema.
+          example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [title, releaseDate, overallRating]
+            default: releaseDate
+          description: Sort results by a specific field.
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sorting order.
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of items per page.
+      responses:
+        '200':
+          description: A list of movies.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 10
+                  totalPages:
+                    type: integer
+                    example: 5
+                  totalResults:
+                    type: integer
+                    example: 45
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Movie' # Simplified movie object for listing
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /movies/{movieId}:
+    get:
+      summary: View movie details
+      tags:
+        - Movies
+      parameters:
+        - name: movieId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the movie to retrieve.
+          example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+      responses:
+        '200':
+          description: Detailed information about the movie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovieDetail' # More detailed movie object
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /movies/{movieId}/showtimes:
+    get:
+      summary: View showtimes for a specific movie
+      tags:
+        - Cinemas & Showtimes
+      parameters:
+        - name: movieId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the movie.
+          example: 'a1b2c3d4-e5f6-7890-1234-567890abcdef'
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter showtimes for a specific date (YYYY-MM-DD).
+          example: '2024-07-20'
+        - name: cinemaId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter showtimes by a specific cinema.
+          example: '1a2b3c4d-5e6f-7890-1234-567890abcdef'
+      responses:
+        '200':
+          description: List of showtimes for the movie, including cinema and screen details.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ShowtimeWithCinemaAndScreen'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cinemas:
+    get:
+      summary: Browse available cinemas
+      tags:
+        - Cinemas & Showtimes
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+          description: Filter cinemas by city.
+          example: New York
+        - name: stateProvince
+          in: query
+          schema:
+            type: string
+          description: Filter cinemas by state/province.
+          example: NY
+      responses:
+        '200':
+          description: A list of cinemas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cinema'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cinemas/{cinemaId}:
+    get:
+      summary: Get details for a specific cinema
+      tags:
+        - Cinemas & Showtimes
+      parameters:
+        - name: cinemaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the cinema to retrieve.
+          example: '1a2b3c4d-5e6f-7890-1234-567890abcdef'
+      responses:
+        '200':
+          description: Detailed information about the cinema, including its screens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CinemaDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /showtimes/{showtimeId}/seats:
+    get:
+      summary: View available seats for a specific showtime
+      tags:
+        - Bookings & Tickets
+      parameters:
+        - name: showtimeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the showtime.
+          example: 'f1e2d3c4-b5a6-9876-5432-10fedcba9876'
+      responses:
+        '200':
+          description: List of seats for the showtime, indicating availability.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SeatAvailability'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /bookings:
+    get:
+      summary: View booking history for the authenticated user
+      tags:
+        - Bookings & Tickets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Pending, Confirmed, Failed, Refunded]
+          description: Filter bookings by payment status.
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter bookings created after a specific date (YYYY-MM-DD).
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter bookings created before a specific date (YYYY-MM-DD).
+      responses:
+        '200':
+          description: A list of the authenticated user's bookings.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookingSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create a new booking
+      tags:
+        - Bookings & Tickets
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - showtimeId
+                - seatIds
+              properties:
+                showtimeId:
+                  type: string
+                  format: uuid
+                  example: 'f1e2d3c4-b5a6-9876-5432-10fedcba9876'
+                  description: The ID of the showtime for which to book tickets.
+                seatIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  minItems: 1
+                  example: ['s1e2a3t4-b5c6-7890-1234-567890abcdef', 's5e6a7t8-b9c0-1234-5678-90abcdef0123']
+                  description: An array of seat IDs to be reserved for this booking.
+      responses:
+        '201':
+          description: Booking successfully created (pending payment).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Selected seats are already reserved or invalid for the showtime.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /bookings/{bookingId}:
+    get:
+      summary: Get details for a specific booking
+      tags:
+        - Bookings & Tickets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the booking to retrieve.
+          example: 'b1o2o3k4-i5n6-7890-1234-567890abcdef'
+      responses:
+        '200':
+          description: Detailed information about the booking, including tickets and payment history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: User is not authorized to view this booking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /bookings/{bookingId}/payments:
+    post:
+      summary: Process payment for a booking
+      tags:
+        - Bookings & Tickets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the booking to process payment for.
+          example: 'b1o2o3k4-i5n6-7890-1234-567890abcdef'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - paymentMethod
+                - amount
+              properties:
+                paymentGateway:
+                  type: string
+                  enum: [Stripe, PayPal, Other]
+                  default: Stripe
+                  example: Stripe
+                  description: The payment gateway used for the transaction.
+                paymentMethod:
+                  type: string
+                  enum: [Credit Card, Digital Wallet, Bank Transfer]
+                  example: Credit Card
+                  description: The method of payment (e.g., Credit Card).
+                amount:
+                  type: number
+                  format: float
+                  minimum: 0.01
+                  example: 25.50
+                  description: The amount to be paid. Should match booking total.
+                cardDetails:
+                  type: object
+                  description: Payment card details (in a real system, this would typically be a secure token from a client-side library).
+                  properties:
+                    cardNumber:
+                      type: string
+                      pattern: '^[0-9]{13,19}$' # Example pattern
+                      example: '4111222233334444'
+                    expMonth:
+                      type: integer
+                      minimum: 1
+                      maximum: 12
+                      example: 12
+                    expYear:
+                      type: integer
+                      example: 2028
+                    cvv:
+                      type: string
+                      pattern: '^[0-9]{3,4}$'
+                      example: '123'
+                digitalWalletToken:
+                  type: string
+                  description: Token from digital wallet provider (e.g., Apple Pay, Google Pay).
+                  example: 'dw_token_1234567890'
+      responses:
+        '200':
+          description: Payment successfully processed and booking confirmed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/BookingDetail'
+                  transaction:
+                    $ref: '#/components/schemas/PaymentTransaction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: User is not authorized to process payment for this booking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Booking is already paid or cancelled, or payment failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your JWT Bearer token in the format **Bearer &lt;token>**
+
+  responses:
+    NotFound:
+      description: The specified resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadRequest:
+      description: Invalid request parameters or body.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required or invalid credentials.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: You do not have permission to access this resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: An unexpected server error occurred.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          example: 'ERR_INVALID_INPUT'
+          description: A specific error code for programmatic handling.
+        message:
+          type: string
+          example: 'The provided email format is invalid.'
+          description: A human-readable error message.
+
+    User:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for the user.
+          example: 'u1s2e3r4-i5d6-7890-1234-567890abcdef'
+        email:
+          type: string
+          format: email
+          description: User's email for login (unique).
+          example: 'user@example.com'
+        firstName:
+          type: string
+          example: 'John'
+        lastName:
+          type: string
+          example: 'Doe'
+        registrationDate:
+          type: string
+          format: date-time
+          readOnly: true
+          example: '2023-01-15T10:00:00Z'
+        lastLogin:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          example: '2024-07-19T14:30:00Z'
+
+    Movie: # Basic movie object for lists
+      type: object
+      properties:
+        movieId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Unique identifier for the movie.
+          example: 'm1o2v3i4-e5d6-7890-1234-567890abcdef'
+        title:
+          type: string
+          example: 'The Great Adventure'
+        synopsis:
+          type: string
+          example: 'A thrilling story of discovery and courage across uncharted lands.'
+        runtimeMinutes:
+          type: integer
+          example: 120
+        posterURL:
+          type: string
+          format: url
+          example: 'https://example.com/posters/adventure.jpg'
+        releaseDate:
+          type: string
+          format: date
+          example: '2024-01-20'
+        overallRating:
+          type: number
+          format: float
+          example: 8.5
+        trailerURL:
+          type: string
+          format: url
+          nullable: true
+          example: 'https://www.youtube.com/watch?v=trailer_id'
+        genres:
+          type: array
+          items:
+            $ref: '#/components/schemas/Genre'
+          description: List of genres associated with the movie.
+
+    MovieDetail: # Detailed movie object
+      allOf:
+        - $ref: '#/components/schemas/Movie'
+        - type: object
+          properties:
+            castCrew:
+              type: array
+              items:
+                $ref: '#/components/schemas/MovieCastCrewWithPerson'
+              description: Full cast and crew details for the movie.
+
+    Person:
+      type: object
+      properties:
+        personId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 'p1e2r3s4-o5n6-7890-1234-567890abcdef'
+        name:
+          type: string
+          example: 'Chris Evans'
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+          example: '1981-06-13'
+        nationality:
+          type: string
+          nullable: true
+          example: 'American'
+
+    MovieCastCrew: # Base, internal use
+      type: object
+      properties:
+        movieCastCrewId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 'm1c2c3i4-d5e6-7890-1234-567890abcdef'
+        movieId:
+          type: string
+          format: uuid
+          description: Foreign key to the Movie entity.
+          example: 'm1o2v3i4-e5d6-7890-1234-567890abcdef'
+        personId:
+          type: string
+          format: uuid
+          description: Foreign key to the Person entity.
+          example: 'p1e2r3s4-o5n6-7890-1234-567890abcdef'
+        role:
+          type: string
+          example: 'Actor'
+          enum: [Director, Actor, Writer, Producer] # Example roles
+        characterName:
+          type: string
+          nullable: true
+          example: 'Captain America'
+          description: Only applicable if the role is 'Actor'.
+
+    MovieCastCrewWithPerson: # For MovieDetail response, embeds Person info
+      allOf:
+        - $ref: '#/components/schemas/MovieCastCrew'
+        - type: object
+          properties:
+            person:
+              $ref: '#/components/schemas/Person'
+
+    Genre:
+      type: object
+      properties:
+        genreId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 'g1e2n3r4-e5i6-7890-1234-567890abcdef'
+        genreName:
+          type: string
+          example: 'Action'
+
+    Cinema: # Basic cinema object for lists
+      type: object
+      properties:
+        cinemaId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 'c1i2n3e4-m5a6-7890-1234-567890abcdef'
+        name:
+          type: string
+          example: 'Grand Cinema Downtown'
+        addressLine1:
+          type: string
+          example: '123 Main St'
+        city:
+          type: string
+          example: 'Metropolis'
+        stateProvince:
+          type: string
+          example: 'NY'
+        postalCode:
+          type: string
+          example: '10001'
+        contactNumber:
+          type: string
+          nullable: true
+          example: '+12125551234'
+        latitude:
+          type: number
+          format: float
+          nullable: true
+          example: 40.7128
+        longitude:
+          type: number
+          format: float
+          nullable: true
+          example: -74.0060
+
+    CinemaDetail: # Detailed cinema object including its screens
+      allOf:
+        - $ref: '#/components/schemas/Cinema'
+        - type: object
+          properties:
+            screens:
+              type: array
+              items:
+                $ref: '#/components/schemas/Screen'
+              description: List of screens within this cinema.
+
+    Screen:
+      type: object
+      properties:
+        screenId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 's1c2r3e4-e5n6-7890-1234-567890abcdef'
+        cinemaId:
+          type: string
+          format: uuid
+          description: Foreign key to the Cinema entity.
+          example: 'c1i2n3e4-m5a6-7890-1234-567890abcdef'
+        screenNumber:
+          type: string
+          example: 'Hall 3'
+        capacity:
+          type: integer
+          example: 150
+        screenType:
+          type: string
+          enum: [2D, 3D, IMAX, VIP, 4DX]
+          example: 'IMAX'
+
+    Seat:
+      type: object
+      properties:
+        seatId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 's1e2a3t4-i5d6-7890-1234-567890abcdef'
+        screenId:
+          type: string
+          format: uuid
+          description: Foreign key to the Screen entity.
+          example: 's1c2r3e4-e5n6-7890-1234-567890abcdef'
+        rowNumber:
+          type: string
+          example: 'A'
+        seatNumber:
+          type: string
+          example: '5'
+        seatType:
+          type: string
+          enum: [Standard, Premium, Wheelchair]
+          example: 'Standard'
+
+    SeatAvailability: # For /showtimes/{showtimeId}/seats, includes availability status
+      allOf:
+        - $ref: '#/components/schemas/Seat'
+        - type: object
+          properties:
+            isAvailable:
+              type: boolean
+              example: true
+              description: Indicates if the seat is currently available for booking.
+            bookingId:
+              type: string
+              format: uuid
+              nullable: true
+              description: If not available, the ID of the booking that currently reserves this seat (for internal use, might be excluded for public API).
+              example: 'b1o2o3k4-i5n6-7890-1234-567890abcdef'
+
+    Showtime: # Base showtime object
+      type: object
+      properties:
+        showtimeId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 'sh1o2w3t-i4m5e6-7890-1234-567890abcdef'
+        movieId:
+          type: string
+          format: uuid
+          description: Foreign key to the Movie entity.
+          example: 'm1o2v3i4-e5d6-7890-1234-567890abcdef'
+        screenId:
+          type: string
+          format: uuid
+          description: Foreign key to the Screen entity.
+          example: 's1c2r3e4-e5n6-7890-1234-567890abcdef'
+        showTimeStart:
+          type: string
+          format: date-time
+          example: '2024-07-20T19:00:00Z'
+        baseTicketPrice:
+          type: number
+          format: float
+          example: 12.50
+
+    ShowtimeWithCinemaAndScreen: # For listing showtimes with nested movie, screen, and cinema details
+      allOf:
+        - $ref: '#/components/schemas/Showtime'
+        - type: object
+          properties:
+            movie:
+              $ref: '#/components/schemas/Movie' # Simplified movie details
+            screen:
+              allOf:
+                - $ref: '#/components/schemas/Screen'
+                - type: object
+                  properties:
+                    cinema:
+                      $ref: '#/components/schemas/Cinema'
+
+    Booking: # Base booking object
+      type: object
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 'b1o2o3k4-i5n6-7890-1234-567890abcdef'
+        userId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Foreign key to the User entity.
+          example: 'u1s2e3r4-i5d6-7890-1234-567890abcdef'
+        bookingDate:
+          type: string
+          format: date-time
+          readOnly: true
+          example: '2024-07-19T10:30:00Z'
+        bookingReference:
+          type: string
+          readOnly: true
+          example: 'ABC-XYZ-123'
+          description: Unique confirmation code for the booking.
+        totalAmount:
+          type: number
+          format: float
+          readOnly: true
+          example: 25.00
+        paymentStatus:
+          type: string
+          enum: [Pending, Confirmed, Failed, Refunded]
+          example: 'Pending'
+        confirmationEmailSentAt:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+          example: '2024-07-19T10:35:00Z'
+
+    BookingSummary: # For listing user bookings, with key movie/cinema info
+      allOf:
+        - $ref: '#/components/schemas/Booking'
+        - type: object
+          properties:
+            ticketsCount:
+              type: integer
+              example: 2
+            movieTitle:
+              type: string
+              example: 'The Great Adventure'
+            cinemaName:
+              type: string
+              example: 'Grand Cinema Downtown'
+            showTimeStart:
+              type: string
+              format: date-time
+              example: '2024-07-20T19:00:00Z'
+
+    BookingDetail: # For specific booking details, with nested tickets and payments
+      allOf:
+        - $ref: '#/components/schemas/Booking'
+        - type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User' # Simplified user data
+            tickets:
+              type: array
+              items:
+                $ref: '#/components/schemas/TicketDetail'
+            paymentTransactions:
+              type: array
+              items:
+                $ref: '#/components/schemas/PaymentTransaction'
+
+    PaymentTransaction:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 't1r2a3n4-s5a6c7-8901-2345-67890abcdef'
+        bookingId:
+          type: string
+          format: uuid
+          description: Foreign key to the Booking entity.
+          example: 'b1o2o3k4-i5n6-7890-1234-567890abcdef'
+        paymentGateway:
+          type: string
+          enum: [Stripe, PayPal, Other]
+          example: 'Stripe'
+        transactionStatus:
+          type: string
+          enum: [Success, Failed, Refunded]
+          example: 'Success'
+        amountPaid:
+          type: number
+          format: float
+          example: 25.00
+        transactionDate:
+          type: string
+          format: date-time
+          example: '2024-07-19T10:32:00Z'
+        paymentMethod:
+          type: string
+          enum: [Credit Card, Digital Wallet, Bank Transfer]
+          example: 'Credit Card'
+        cardLast4Digits:
+          type: string
+          nullable: true
+          example: '4242'
+          description: Last 4 digits of the card, if applicable.
+        gatewayTransactionID:
+          type: string
+          nullable: true
+          example: 'ch_1J2K3L4M5N6O7P8Q'
+          description: The transaction ID provided by the payment gateway.
+
+    Ticket: # Base ticket object
+      type: object
+      properties:
+        ticketId:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 't1i2c3k4-e5t6-7890-1234-567890abcdef'
+        bookingId:
+          type: string
+          format: uuid
+          description: Foreign key to the Booking entity.
+          example: 'b1o2o3k4-i5n6-7890-1234-567890abcdef'
+        showtimeId:
+          type: string
+          format: uuid
+          description: Foreign key to the Showtime entity.
+          example: 'sh1o2w3t-i4m5e6-7890-1234-567890abcdef'
+        seatId:
+          type: string
+          format: uuid
+          description: Foreign key to the Seat entity.
+          example: 's1e2a3t4-i5d6-7890-1234-567890abcdef'
+        pricePaid:
+          type: number
+          format: float
+          example: 12.50
+        ticketStatus:
+          type: string
+          enum: [Valid, Scanned, Cancelled]
+          example: 'Valid'
+        qrCode:
+          type: string
+          format: url
+          nullable: true
+          example: 'https://example.com/qr/ticket_id.png'
+          description: Unique QR code for ticket validation.
+
+    TicketDetail: # For detailed booking response, with nested showtime, movie, screen, cinema, and seat info
+      allOf:
+        - $ref: '#/components/schemas/Ticket'
+        - type: object
+          properties:
+            showtime:
+              allOf:
+                - $ref: '#/components/schemas/Showtime'
+                - type: object
+                  properties:
+                    movie:
+                      $ref: '#/components/schemas/Movie' # Simplified movie
+                    screen:
+                      allOf:
+                        - $ref: '#/components/schemas/Screen'
+                        - type: object
+                          properties:
+                            cinema:
+                              $ref: '#/components/schemas/Cinema'
+            seat:
+              $ref: '#/components/schemas/Seat'
